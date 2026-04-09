@@ -21,7 +21,7 @@ public class WebsiteAnalyzer {
     /**
      * Erstellt einen neuen WebsiteAnalyzer.
      *
-     * @param imageDownloader der ImageDownloader für delegierte Downloads
+     * @param imageDownloader der ImageDownloader fuer delegierte Downloads
      */
     public WebsiteAnalyzer(ImageDownloader imageDownloader) {
         this.imageDownloader = imageDownloader;
@@ -31,7 +31,7 @@ public class WebsiteAnalyzer {
      * Analysiert die Website unter der angegebenen URI und extrahiert Bild-Links.
      *
      * @param uri die zu analysierende Website-URI
-     * @param folderNum die Ordnernummer für die Downloads dieser URL
+     * @param folderNum die Ordnernummer fuer die Downloads dieser URL
      */
     public void analyze(URI uri, int folderNum) {
         try {
@@ -59,7 +59,7 @@ public class WebsiteAnalyzer {
     /**
      * Konvertiert relative URLs zu absoluten URLs.
      *
-     * @param url die möglicherweise relative URL
+     * @param url die moeglicherweise relative URL
      * @param baseUrl die Basis-URL
      * @return die absolute URL
      */

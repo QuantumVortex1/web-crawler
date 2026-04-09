@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 /**
- * Verantwortlich für das Herunterladen und Speichern von Bildern.
+ * Verantwortlich fuer das Herunterladen und Speichern von Bildern.
  * Behandelt Dateiname-Kollisionen durch Suffix-Anhang.
  */
 public class ImageDownloader {
@@ -29,7 +29,7 @@ public class ImageDownloader {
      *
      * @param config die Crawl-Konfiguration mit Download-Pfad
      * @param activeDownloadTasks AtomicInteger zum Tracking der aktiven Download-Tasks
-     * @param downloadExecutor der ExecutorService für Download-Tasks
+     * @param downloadExecutor der ExecutorService fuer Download-Tasks
      */
     public ImageDownloader(IImageCrawlerConfig config, AtomicInteger activeDownloadTasks, 
                           ExecutorService downloadExecutor) {
@@ -42,7 +42,7 @@ public class ImageDownloader {
      * Reiht einen Image-Download in die Warteschlange ein.
      *
      * @param imageUrl die herunterladende Image-URL
-     * @param folderNum die Ordnernummer für das Ziel-Verzeichnis
+     * @param folderNum die Ordnernummer fuer das Ziel-Verzeichnis
      */
     public void queueDownload(String imageUrl, int folderNum) {
         activeDownloadTasks.incrementAndGet();
@@ -61,7 +61,7 @@ public class ImageDownloader {
     }
 
     /**
-     * Lädt ein Bild herunter und speichert es mit Kollisionsprüfung.
+     * Laedt ein Bild herunter und speichert es mit Kollisionspruefung.
      *
      * @param imageUrl die herunterladende Image-URL
      * @param folderNum die Ordnernummer
@@ -97,7 +97,7 @@ public class ImageDownloader {
     }
 
     /**
-     * Findet einen eindeutigen Dateipfad, indem bei Bedarf ein Suffix angehängt wird.
+     * Findet einen eindeutigen Dateipfad, indem bei Bedarf ein Suffix angehaengt wird.
      *
      * @param imageUri die Bild-URI
      * @param directory das Zielverzeichnis

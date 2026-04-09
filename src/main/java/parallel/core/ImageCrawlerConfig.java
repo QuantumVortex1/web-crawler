@@ -5,8 +5,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Konfigurationsklasse für den ImageCrawler.
- * Verwaltet Thread-Pool-Größen und Download-Pfad.
+ * Konfigurationsklasse fuer den ImageCrawler.
+ * Verwaltet Thread-Pool-Groeßen und Download-Pfad.
  */
 public class ImageCrawlerConfig implements IImageCrawlerConfig {
 
@@ -19,7 +19,7 @@ public class ImageCrawlerConfig implements IImageCrawlerConfig {
      *
      * @param numberOfAllowedParallelWebsiteScans Anzahl paralleler Website-Scans
      * @param numberOfAllowedParallelImageDownloads Anzahl paralleler Image-Downloads
-     * @param downloadPath Pfad für heruntergeladene Bilder
+     * @param downloadPath Pfad fuer heruntergeladene Bilder
      */
     public ImageCrawlerConfig(int numberOfAllowedParallelWebsiteScans,
                              int numberOfAllowedParallelImageDownloads,
@@ -45,8 +45,6 @@ public class ImageCrawlerConfig implements IImageCrawlerConfig {
 
     /**
      * Erstellt eine ImageCrawlerConfig mit Default-Werten.
-     *
-     * @param downloadPath Pfad für heruntergeladene Bilder
      */
     public ImageCrawlerConfig() {
         this(4, 8, Paths.get("downloads"));

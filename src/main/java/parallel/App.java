@@ -7,7 +7,7 @@ import parallel.core.ImageCrawlerConfig;
 import java.net.URI;
 
 /**
- * Einstiegspunkt für den Beispielaufruf des Image-Crawlers.
+ * Einstiegspunkt fuer den Beispielaufruf des Image-Crawlers.
  */
 public class App {
 

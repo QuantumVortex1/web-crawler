@@ -11,7 +11,7 @@ import java.util.logging.Logger;
 
 /**
  * Koordiniert den parallelen Web-Crawling-Prozess mit separaten Thread-Pools
- * für Website-Scans und Image-Downloads.
+ * fuer Website-Scans und Image-Downloads.
  */
 public class ImageCrawler implements IImageCrawler {
 
@@ -25,10 +25,10 @@ public class ImageCrawler implements IImageCrawler {
     private final ImageDownloader imageDownloader;
 
     /**
-     * Erstellt einen neuen ImageCrawler mit separaten ExecutorServices für
+     * Erstellt einen neuen ImageCrawler mit separaten ExecutorServices fuer
      * Website-Scans und Image-Downloads.
      *
-     * @param config die Konfiguration mit Pool-Größen und Download-Pfad
+     * @param config die Konfiguration mit Pool-Groeßen und Download-Pfad
      */
     public ImageCrawler(IImageCrawlerConfig config) {
         this.folderCounter = new AtomicInteger(0);
