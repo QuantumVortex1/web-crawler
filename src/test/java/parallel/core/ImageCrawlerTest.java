@@ -1,33 +1,80 @@
 package parallel.core;
 
-import parallel.api.IImageCrawlerConfig;
+import okhttp3.mockwebserver.Dispatcher;
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Paths;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
+import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @DisplayName("ImageCrawler Tests")
 class ImageCrawlerTest {
 
-    @Mock
-    private IImageCrawlerConfig config;
+    @TempDir
+    Path tempDownloadPath;
 
     private ImageCrawler crawler;
+    private MockWebServer server;
 
     @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-        
-        config = new ImageCrawlerConfig(2, 4, Paths.get("test-crawler"));
-        crawler = new ImageCrawler(config);
+    void setUp() throws IOException {
+        server = new MockWebServer();
+        server.start();
+        server.setDispatcher(new Dispatcher() {
+            @Override
+            public MockResponse dispatch(RecordedRequest request) {
+                String path = request.getPath();
+                if ("/page1.html".equals(path)) {
+                    String html = "<html><body><img src='/img/first.jpg'><img src='/img/second.jpg'></body></html>";
+                    return new MockResponse().setResponseCode(200).setBody(html);
+                }
+                if ("/page2.html".equals(path)) {
+                    String html = "<html><body><img src='/img/third.jpg'></body></html>";
+                    return new MockResponse().setResponseCode(200).setBody(html);
+                }
+                if ("/slow-page.html".equals(path)) {
+                    String html = "<html><body><img src='/img/slow.jpg'></body></html>";
+                    return new MockResponse()
+                        .setResponseCode(200)
+                        .setBody(html)
+                        .setBodyDelay(350, TimeUnit.MILLISECONDS);
+                }
+                if (path != null && path.startsWith("/img/")) {
+                    return new MockResponse().setResponseCode(200).setBody("img-bytes");
+                }
+                return new MockResponse().setResponseCode(404);
+            }
+        });
+
+        crawler = new ImageCrawler(new ImageCrawlerConfig(1, 4, tempDownloadPath));
+    }
+
+    @AfterEach
+    void tearDown() throws Exception {
+        if (crawler != null) {
+            crawler.shutdown();
+        }
+        if (server != null) {
+            server.shutdown();
+        }
     }
 
     @Test
@@ -38,50 +85,49 @@ class ImageCrawlerTest {
     }
 
     @Test
-    @DisplayName("isIdle() ist true bei Initialisierung")
-    void testInitiallyIdle() {
-        assertTrue(crawler.isIdle());
+    @DisplayName("crawl() laedt Bilder in nummerierte Unterordner")
+    void testCrawlDownloadsImagesIntoNumberedFolders() throws Exception {
+        URI page1 = URI.create(server.url("/page1.html").toString());
+        URI page2 = URI.create(server.url("/page2.html").toString());
+
+        crawler.crawl(page1);
+        crawler.crawl(page2);
+
+        assertTrue(waitFor(crawler::isIdle, 10000));
+
+        assertTrue(Files.exists(tempDownloadPath.resolve("1").resolve("first.jpg")));
+        assertTrue(Files.exists(tempDownloadPath.resolve("1").resolve("second.jpg")));
+        assertTrue(Files.exists(tempDownloadPath.resolve("2").resolve("third.jpg")));
     }
 
     @Test
-    @DisplayName("crawl() mit ungültiger URI")
-    void testCrawlWithInvalidUri() throws Exception {
-        assertDoesNotThrow(() -> {
-            crawler.crawl(new URI("not-a-valid-uri"));
-        });
+    @DisplayName("isIdle() meldet busy waehrend Verarbeitung und danach idle")
+    void testIsIdleTransition() throws Exception {
+        URI slowPage = URI.create(server.url("/slow-page.html").toString());
+
+        crawler.crawl(slowPage);
+
+        assertTrue(waitFor(() -> !crawler.isIdle(), 3000));
+        assertTrue(waitFor(crawler::isIdle, 10000));
     }
 
     @Test
-    @DisplayName("crawl() mit null URI")
-    void testCrawlWithNullUri() {
-        crawler.crawl(null);
-    }
+    @DisplayName("Thread-Sicherheit: viele parallele crawl() Aufrufe")
+    void testParallelCrawlCalls() throws Exception {
+        URI page1 = URI.create(server.url("/page1.html").toString());
 
-    @Test
-    @DisplayName("Mehrere crawl() Aufrufe")
-    void testMultipleCrawlCalls() {
-        assertDoesNotThrow(() -> {
-            for (int i = 0; i < 5; i++) {
-                crawler.crawl(new URI("https://example.com/page" + i));
-            }
-        });
-    }
-
-    @Test
-    @DisplayName("Thread-Sicherheit: Parallele crawl() Aufrufe")
-    void testParallelCrawlCalls() throws InterruptedException {
-        int threadCount = 10;
+        int callCount = 20;
         CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        CountDownLatch endLatch = new CountDownLatch(callCount);
+        AtomicReference<Throwable> threadFailure = new AtomicReference<>();
 
-        for (int i = 0; i < threadCount; i++) {
-            final int index = i;
+        for (int i = 0; i < callCount; i++) {
             new Thread(() -> {
                 try {
                     startLatch.await();
-                    crawler.crawl(new URI("https://example.com/page" + index));
+                    crawler.crawl(page1);
                 } catch (Exception e) {
-                    fail("Exception in thread: " + e.getMessage());
+                    threadFailure.compareAndSet(null, e);
                 } finally {
                     endLatch.countDown();
                 }
@@ -89,131 +135,37 @@ class ImageCrawlerTest {
         }
 
         startLatch.countDown();
-        boolean completed = endLatch.await(10, TimeUnit.SECONDS);
-        
-        assertTrue(completed);
+        assertTrue(endLatch.await(5, TimeUnit.SECONDS));
+        if (threadFailure.get() != null) {
+            fail("Paralleler crawl-Aufruf war nicht erfolgreich: " + threadFailure.get().getMessage());
+        }
+        assertTrue(waitFor(crawler::isIdle, 15000));
+
+        try (Stream<Path> dirs = Files.list(tempDownloadPath)) {
+            long folderCount = dirs.filter(Files::isDirectory).count();
+            assertEquals(callCount, folderCount);
+        }
     }
 
     @Test
-    @DisplayName("isIdle() nach crawl() und Abschluss")
-    void testIdleAfterCrawlCompletion() throws Exception {
-        crawler.crawl(new URI("https://httpbin.org/status/404"));
-        
-        int maxWaitTime = 5000;
-        long startTime = System.currentTimeMillis();
-        
-        while (!crawler.isIdle() && System.currentTimeMillis() - startTime < maxWaitTime) {
-            Thread.sleep(100);
-        }
-        
+    @DisplayName("crawl() nach shutdown haelt Idle-State konsistent")
+    void testCrawlAfterShutdownKeepsIdleStateConsistent() {
+        URI page1 = URI.create(server.url("/page1.html").toString());
+
+        crawler.shutdown();
+        crawler.crawl(page1);
+
         assertTrue(crawler.isIdle());
     }
 
-    @Test
-    @DisplayName("shutdown() beendet den Crawler")
-    void testShutdown() throws Exception {
-        crawler.crawl(new URI("https://example.com"));
-        
-        Thread.sleep(100);
-        
-        assertDoesNotThrow(() -> {
-            crawler.shutdown();
-        });
-    }
-
-    @Test
-    @DisplayName("Grenzfall: crawl() mit sehr vielen URLs")
-    void testCrawlWithManyUrls() throws Exception {
-        for (int i = 0; i < 100; i++) {
-            crawler.crawl(new URI("https://example.com/page" + i));
-        }
-        
-        assertTrue(true);
-    }
-
-    @Test
-    @DisplayName("Thread-Sicherheit: Concurrent reads von isIdle()")
-    void testThreadSafeIsIdleReads() throws InterruptedException {
-        int threadCount = 20;
-        CountDownLatch latch = new CountDownLatch(threadCount);
-
-        for (int i = 0; i < threadCount; i++) {
-            new Thread(() -> {
-                try {
-                    for (int j = 0; j < 100; j++) {
-                        boolean idle = crawler.isIdle();
-                        assertNotNull(idle);
-                    }
-                } finally {
-                    latch.countDown();
-                }
-            }).start();
-        }
-
-        boolean completed = latch.await(10, TimeUnit.SECONDS);
-        assertTrue(completed);
-    }
-
-    @Test
-    @DisplayName("Grenzfall: crawl() und shutdown() Race Condition")
-    void testCrawlAndShutdownRaceCondition() throws Exception {
-        CountDownLatch latch = new CountDownLatch(2);
-
-        Thread crawlThread = new Thread(() -> {
-            try {
-                for (int i = 0; i < 10; i++) {
-                    crawler.crawl(new URI("https://example.com/" + i));
-                    Thread.sleep(10);
-                }
-            } catch (Exception e) {
-            } finally {
-                latch.countDown();
+    private boolean waitFor(BooleanSupplier condition, long timeoutMs) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return true;
             }
-        });
-
-        Thread shutdownThread = new Thread(() -> {
-            try {
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                crawler.shutdown();
-            } finally {
-                latch.countDown();
-            }
-        });
-
-        crawlThread.start();
-        shutdownThread.start();
-
-        boolean completed = latch.await(10, TimeUnit.SECONDS);
-        assertTrue(completed);
-    }
-
-    @Test
-    @DisplayName("Grenzfall: URI mit Sonderzeichen")
-    void testCrawlWithSpecialCharactersInUri() throws Exception {
-        assertDoesNotThrow(() -> {
-            crawler.crawl(new URI("https://example.com/path?query=value&other=123#fragment"));
-        });
-    }
-
-    @Test
-    @DisplayName("Grenzfall: Sehr lange URI")
-    void testCrawlWithVeryLongUri() throws Exception {
-        String longPath = "a".repeat(2000);
-        assertDoesNotThrow(() -> {
-            crawler.crawl(new URI("https://example.com/" + longPath));
-        });
-    }
-
-    @Test
-    @DisplayName("Grenzfall: HTTP und HTTPS URLs gemischt")
-    void testCrawlWithMixedProtocols() throws Exception {
-        assertDoesNotThrow(() -> {
-            crawler.crawl(new URI("http://example.com"));
-            crawler.crawl(new URI("https://example.com"));
-        });
+            Thread.sleep(25);
+        }
+        return condition.getAsBoolean();
     }
 }

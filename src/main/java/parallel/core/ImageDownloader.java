@@ -7,6 +7,7 @@ import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
@@ -44,13 +45,18 @@ public class ImageDownloader {
      */
     public void queueDownload(String imageUrl, int folderNum) {
         activeDownloadTasks.incrementAndGet();
-        downloadExecutor.submit(() -> {
-            try {
-                download(imageUrl, folderNum);
-            } finally {
-                activeDownloadTasks.decrementAndGet();
-            }
-        });
+        try {
+            downloadExecutor.submit(() -> {
+                try {
+                    download(imageUrl, folderNum);
+                } finally {
+                    activeDownloadTasks.decrementAndGet();
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            activeDownloadTasks.decrementAndGet();
+            LOGGER.warning("Download-Task konnte nicht eingeplant werden (Executor beendet): " + imageUrl);
+        }
     }
 
     /**
@@ -112,7 +118,7 @@ public class ImageDownloader {
             extension = fileName.substring(dotIndex);
         }
 
-        int counter = 1;
+        int counter = 2;
         while (true) {
             Path newPath = directory.resolve(nameWithoutExt + "_" + counter + extension);
             if (!Files.exists(newPath)) {

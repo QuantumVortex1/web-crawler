@@ -5,14 +5,26 @@ import parallel.core.ImageCrawler;
 import parallel.core.ImageCrawlerConfig;
 import java.net.URI;
 
+/**
+ * Einstiegspunkt für den Beispielaufruf des Image-Crawlers.
+ */
 public class App {
+
+    /**
+     * Startet den Crawler mit Beispiel-URLs und wartet bis alle Tasks abgeschlossen sind.
+     *
+     * @param args Kommandozeilenargumente
+     */
     public static void main(String[] args) {
         ImageCrawlerConfig config = new ImageCrawlerConfig();
 
         IImageCrawler crawler = new ImageCrawler(config);
 
         String[] urls = {
-            "https://de.wikipedia.org/wiki/World_Wide_Web"
+            "https://de.wikipedia.org/wiki/World_Wide_Web",
+            "https://www.bbc.com/news",
+            "https://www.nationalgeographic.com/animals",
+            "https://www.youtube.com/"
         };
 
         System.out.println("Starte Web-Crawler.");

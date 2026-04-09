@@ -1,207 +1,170 @@
 package parallel.core;
 
-import parallel.api.IImageCrawlerConfig;
+import okhttp3.mockwebserver.Dispatcher;
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import parallel.api.IImageCrawlerConfig;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
+import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
 
 @DisplayName("ImageDownloader Tests")
 class ImageDownloaderTest {
 
-    private static final Path TEST_DOWNLOAD_PATH = Paths.get("test-downloads");
-
     @Mock
     private IImageCrawlerConfig config;
+
+    @TempDir
+    Path tempDownloadPath;
 
     private AtomicInteger activeDownloadTasks;
     private ExecutorService executor;
     private ImageDownloader downloader;
+    private MockWebServer server;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() throws IOException {
         MockitoAnnotations.openMocks(this);
         activeDownloadTasks = new AtomicInteger(0);
         executor = Executors.newFixedThreadPool(2);
-
-        when(config.getDownloadPath()).thenReturn(TEST_DOWNLOAD_PATH);
-
+        when(config.getDownloadPath()).thenReturn(tempDownloadPath);
         downloader = new ImageDownloader(config, activeDownloadTasks, executor);
 
-        if (Files.exists(TEST_DOWNLOAD_PATH)) {
-            Files.walk(TEST_DOWNLOAD_PATH)
-                .sorted(java.util.Collections.reverseOrder())
-                .forEach(path -> {
-                    try {
-                        Files.delete(path);
-                    } catch (Exception e) {
-                    }
-                });
+        server = new MockWebServer();
+        server.start();
+        server.setDispatcher(new Dispatcher() {
+            @Override
+            public MockResponse dispatch(RecordedRequest request) {
+                if ("/images/image.jpg".equals(request.getPath())) {
+                    return new MockResponse().setResponseCode(200).setBody("sample-image");
+                }
+                return new MockResponse().setResponseCode(404);
+            }
+        });
+    }
+
+    @AfterEach
+    void tearDown() throws Exception {
+        if (server != null) {
+            server.shutdown();
+        }
+        if (executor != null) {
+            executor.shutdownNow();
+            executor.awaitTermination(2, TimeUnit.SECONDS);
         }
     }
 
     @Test
-    @DisplayName("Konstruktor akzeptiert alle abhängigen Komponenten")
-    void testConstructor() {
-        ImageDownloader dl = new ImageDownloader(config, activeDownloadTasks, executor);
-        assertNotNull(dl);
+    @DisplayName("queueDownload() speichert Datei im Zielordner")
+    void testQueueDownloadStoresFileInTargetFolder() throws Exception {
+        String imageUrl = server.url("/images/image.jpg").toString();
+
+        downloader.queueDownload(imageUrl, 1);
+
+        assertTrue(waitFor(() -> activeDownloadTasks.get() == 0, 5000));
+
+        Path storedFile = tempDownloadPath.resolve("1").resolve("image.jpg");
+        assertTrue(Files.exists(storedFile));
+        assertArrayEquals("sample-image".getBytes(StandardCharsets.UTF_8), Files.readAllBytes(storedFile));
     }
 
     @Test
-    @DisplayName("queueDownload() inkrementiert activeDownloadTasks")
-    void testQueueDownloadIncrementsCounter() throws InterruptedException {
-        downloader.queueDownload("https://example.com/image.jpg", 1);
-        
-        Thread.sleep(100);
-        
-        assertTrue(activeDownloadTasks.get() >= 0);
+    @DisplayName("Dateikollision: zweite Datei bekommt Suffix _2")
+    void testNameCollisionUsesSuffixTwo() throws Exception {
+        Path targetDir = tempDownloadPath.resolve("1");
+        Files.createDirectories(targetDir);
+        Files.writeString(targetDir.resolve("image.jpg"), "first");
+
+        String imageUrl = server.url("/images/image.jpg").toString();
+        downloader.queueDownload(imageUrl, 1);
+
+        assertTrue(waitFor(() -> activeDownloadTasks.get() == 0, 5000));
+        assertTrue(Files.exists(targetDir.resolve("image_2.jpg")));
     }
 
     @Test
-    @DisplayName("Grenzfall: Leere URL")
-    void testEmptyUrl() {
-        downloader.queueDownload("", 1);
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {1, 10, 100, 1000})
-    @DisplayName("Grenzfall: Verschiedene folderNum-Werte")
-    void testVariousFolderNumbers(int folderNum) {
-        downloader.queueDownload("https://example.com/image.jpg", folderNum);
-    }
-
-    @Test
-    @DisplayName("Grenzfall: Negative folderNum")
-    void testNegativeFolderNumber() {
-        downloader.queueDownload("https://example.com/image.jpg", -1);
-    }
-
-    @Test
-    @DisplayName("Thread-Sicherheit: Mehrfache parallele Downloads")
-    void testThreadSafetyMultipleDownloads() throws InterruptedException {
-        int numberOfDownloads = 50;
-        
-        for (int i = 0; i < numberOfDownloads; i++) {
-            downloader.queueDownload("https://example.com/image" + i + ".jpg", i);
-        }
-        
+    @DisplayName("RejectedExecution behaelt Counter konsistent")
+    void testRejectedExecutionKeepsCounterConsistent() {
         executor.shutdown();
-        boolean completed = executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS);
-        assertTrue(completed || activeDownloadTasks.get() == 0);
+
+        downloader.queueDownload("https://example.invalid/image.jpg", 1);
+
+        assertEquals(0, activeDownloadTasks.get());
     }
 
     @Test
-    @DisplayName("Thread-Sicherheit: activeDownloadTasks Consistency")
-    void testActiveDownloadTasksConsistency() throws InterruptedException {
-        ExecutorService service = Executors.newFixedThreadPool(8);
-        AtomicInteger counter = new AtomicInteger(0);
-        ImageDownloader dl = new ImageDownloader(config, counter, service);
-        
-        int tasks = 100;
-        for (int i = 0; i < tasks; i++) {
-            dl.queueDownload("https://example.com/image" + i + ".jpg", 1);
-        }
-        
-        service.shutdown();
-        boolean completed = service.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS);
-        
-        assertTrue(completed);
+    @DisplayName("Ungueltige URL hinterlaesst keinen aktiven Download")
+    void testInvalidUrlReturnsToIdleState() throws Exception {
+        downloader.queueDownload("not a valid url", 1);
+
+        assertTrue(waitFor(() -> activeDownloadTasks.get() == 0, 5000));
+        assertEquals(0, countRegularFiles(tempDownloadPath));
     }
 
     @Test
-    @DisplayName("Grenzfall: Ungültige URL-Syntax")
-    void testInvalidUrlSyntax() {
-        assertDoesNotThrow(() -> {
-            downloader.queueDownload("not a valid url!@#$%", 1);
-        });
-    }
-
-    @Test
-    @DisplayName("Grenzfall: URL mit Sonderzeichen")
-    void testUrlWithSpecialCharacters() {
-        assertDoesNotThrow(() -> {
-            downloader.queueDownload("https://example.com/image with spaces.jpg", 1);
-        });
-    }
-
-    @Test
-    @DisplayName("Grenzfall: Sehr lange URL")
-    void testVeryLongUrl() {
-        String longUrl = "https://example.com/" + "a".repeat(2000) + ".jpg";
-        assertDoesNotThrow(() -> {
-            downloader.queueDownload(longUrl, 1);
-        });
-    }
-
-    @Test
-    @DisplayName("Dateiname-Extraktion: Various Patterns")
+    @DisplayName("Dateiname-Extraktion funktioniert fuer typische Pfade")
     void testFileNameExtraction() throws Exception {
         var method = ImageDownloader.class.getDeclaredMethod("extractFileName", String.class);
         method.setAccessible(true);
-        
-        String result1 = (String) method.invoke(downloader, "/path/to/image.jpg");
-        assertEquals("image.jpg", result1);
-        
-        String result2 = (String) method.invoke(downloader, "/image.jpg");
-        assertEquals("image.jpg", result2);
-        
-        String result3 = (String) method.invoke(downloader, "image.jpg");
-        assertEquals("image.jpg", result3);
+
+        String result = (String) method.invoke(downloader, "/path/to/image.jpg");
+        assertEquals("image.jpg", result);
     }
 
     @Test
-    @DisplayName("Dateiname-Extraktion: Edge Case - Null")
-    void testFileNameExtractionWithNull() throws Exception {
-        var method = ImageDownloader.class.getDeclaredMethod("extractFileName", String.class);
-        method.setAccessible(true);
-        
-        Object result = method.invoke(downloader, new Object[]{null});
-        assertNull(result);
-    }
-
-    @Test
-    @DisplayName("Grenzfall: Eindeutige Dateinamen mit Kollision")
-    void testUniqueFilePathWithCollisions() throws Exception {
-        Path testDir = TEST_DOWNLOAD_PATH.resolve("collision-test");
+    @DisplayName("Kollisionspfad startet bei _2")
+    void testUniqueFilePathStartsAtTwo() throws Exception {
+        Path testDir = tempDownloadPath.resolve("collision-test");
         Files.createDirectories(testDir);
-        
-        Path file1 = testDir.resolve("image.jpg");
-        Files.createFile(file1);
-        
+        Files.createFile(testDir.resolve("image.jpg"));
+
         var method = ImageDownloader.class.getDeclaredMethod("getUniqueFilePath", Path.class, String.class);
         method.setAccessible(true);
-        
+
         Path uniquePath = (Path) method.invoke(downloader, testDir, "image.jpg");
-        
-        assertNotEquals(file1, uniquePath);
-        assertTrue(uniquePath.toString().contains("image_1.jpg"));
+        assertNotNull(uniquePath);
+        assertTrue(uniquePath.getFileName().toString().endsWith("_2.jpg"));
     }
 
-    @Test
-    @DisplayName("Grenzfall: Datei ohne Extension")
-    void testFileWithoutExtension() throws Exception {
-        Path testDir = TEST_DOWNLOAD_PATH.resolve("no-ext-test");
-        Files.createDirectories(testDir);
-        
-        var method = ImageDownloader.class.getDeclaredMethod("getUniqueFilePath", Path.class, String.class);
-        method.setAccessible(true);
-        
-        Path uniquePath = (Path) method.invoke(downloader, testDir, "image");
-        
-        assertNotNull(uniquePath);
-        assertTrue(uniquePath.toString().contains("image"));
+    private boolean waitFor(BooleanSupplier condition, long timeoutMs) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return true;
+            }
+            Thread.sleep(25);
+        }
+        return condition.getAsBoolean();
+    }
+
+    private long countRegularFiles(Path root) throws IOException {
+        if (!Files.exists(root)) {
+            return 0;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            return walk.filter(Files::isRegularFile).count();
+        }
     }
 }

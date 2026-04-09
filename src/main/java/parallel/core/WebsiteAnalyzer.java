@@ -65,6 +65,10 @@ public class WebsiteAnalyzer {
      */
     private String resolveUrl(String url, String baseUrl) {
         try {
+            if (url == null || url.trim().isEmpty()) {
+                return null;
+            }
+
             if (url.startsWith("http://") || url.startsWith("https://")) {
                 return url;
             }
@@ -72,9 +76,6 @@ public class WebsiteAnalyzer {
             URL base = new URL(baseUrl);
             if (url.startsWith("//")) {
                 return base.getProtocol() + ":" + url;
-            }
-            if (url.startsWith("/")) {
-                return base.getProtocol() + "://" + base.getHost() + url;
             }
             URL resolved = new URL(base, url);
             return resolved.toString();

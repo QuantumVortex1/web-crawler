@@ -38,16 +38,25 @@ public class ImageCrawlerConfig implements IImageCrawlerConfig {
         this(4, 8, Paths.get("downloads"));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public int getNumberOfAllowedParallelWebsiteScans() {
         return numberOfAllowedParallelWebsiteScans;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public int getNumberOfAllowedParallelImageDownloads() {
         return numberOfAllowedParallelImageDownloads;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Path getDownloadPath() {
         return downloadPath;
