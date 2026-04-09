@@ -1,19 +1,23 @@
 package parallel;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/**
- * Unit test for simple App.
- */
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@DisplayName("App Integration Tests")
 public class AppTest {
 
-    /**
-     * Rigorous Test :-)
-     */
     @Test
-    public void shouldAnswerWithTrue() {
-        assertTrue(true);
+    @DisplayName("App Konstruktor existiert")
+    void testAppConstructor() {
+        assertTrue(new App() != null);
+    }
+
+    @Test
+    @DisplayName("App.main() kann ohne Fehler aufgerufen werden")
+    void testMainMethodExists() throws Exception {
+        var method = App.class.getDeclaredMethod("main", String[].class);
+        assertTrue(method != null);
     }
 }

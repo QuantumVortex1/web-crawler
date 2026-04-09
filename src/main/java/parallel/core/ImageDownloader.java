@@ -134,7 +134,7 @@ public class ImageDownloader {
             URLConnection connection = new URI(urlString).toURL().openConnection();
             connection.setConnectTimeout(TIMEOUT_MS);
             connection.setReadTimeout(TIMEOUT_MS);
-            // connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
 
             try (var inputStream = connection.getInputStream()) {
                 Files.copy(inputStream, targetPath);
