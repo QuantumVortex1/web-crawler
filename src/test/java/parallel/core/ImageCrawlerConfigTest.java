@@ -75,39 +75,43 @@ class ImageCrawlerConfigTest {
     }
 
     @Test
-    @DisplayName("toString() Methode")
-    void testToString() {
-        ImageCrawlerConfig config = new ImageCrawlerConfig(4, 8, TEST_DOWNLOAD_PATH);
-        String str = config.toString();
-        
-        assertNotNull(str);
-        assertTrue(str.length() > 0);
+    @DisplayName("Grenzfall: Pool-Groesse Website-Scans = 0 ist ungueltig")
+    void testZeroWebsiteScanPoolSizeIsRejected() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> new ImageCrawlerConfig(0, 1, TEST_DOWNLOAD_PATH)
+        );
     }
 
     @Test
-    @DisplayName("Grenzfall: Pool-Größe = 0 (sollte akzeptiert werden)")
-    void testZeroPoolSize() {
-        ImageCrawlerConfig config = new ImageCrawlerConfig(0, 0, TEST_DOWNLOAD_PATH);
-        
-        assertEquals(0, config.getNumberOfAllowedParallelWebsiteScans());
-        assertEquals(0, config.getNumberOfAllowedParallelImageDownloads());
+    @DisplayName("Grenzfall: Pool-Groesse Image-Downloads = 0 ist ungueltig")
+    void testZeroImageDownloadPoolSizeIsRejected() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> new ImageCrawlerConfig(1, 0, TEST_DOWNLOAD_PATH)
+        );
     }
 
     @Test
-    @DisplayName("Grenzfall: Negative Pool-Größe (Edge Case)")
-    void testNegativePoolSize() {
-        ImageCrawlerConfig config = new ImageCrawlerConfig(-1, -1, TEST_DOWNLOAD_PATH);
-        
-        assertEquals(-1, config.getNumberOfAllowedParallelWebsiteScans());
-        assertEquals(-1, config.getNumberOfAllowedParallelImageDownloads());
+    @DisplayName("Grenzfall: Negative Pool-Groesse ist ungueltig")
+    void testNegativePoolSizeIsRejected() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> new ImageCrawlerConfig(-1, 1, TEST_DOWNLOAD_PATH)
+        );
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> new ImageCrawlerConfig(1, -1, TEST_DOWNLOAD_PATH)
+        );
     }
 
     @Test
-    @DisplayName("Grenzfall: Null Download-Pfad")
-    void testNullDownloadPath() {
-        ImageCrawlerConfig config = new ImageCrawlerConfig(4, 8, null);
-        
-        assertNull(config.getDownloadPath());
+    @DisplayName("Grenzfall: Null Download-Pfad ist ungueltig")
+    void testNullDownloadPathIsRejected() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> new ImageCrawlerConfig(1, 1, null)
+        );
     }
 
     @Test

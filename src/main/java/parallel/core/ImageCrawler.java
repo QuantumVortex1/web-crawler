@@ -54,11 +54,11 @@ public class ImageCrawler implements IImageCrawler {
      */
     @Override
     public void crawl(final URI uri) {
+        int folderNum = folderCounter.incrementAndGet();
         activeWebsiteTasks.incrementAndGet();
         try {
             websiteScanExecutor.submit(() -> {
                 try {
-                    int folderNum = folderCounter.incrementAndGet();
                     websiteAnalyzer.analyze(uri, folderNum);
                 } catch (Exception e) {
                     LOGGER.warning("Fehler beim Crawling von " + uri + ": " + e.getMessage());

@@ -4,6 +4,7 @@ import parallel.api.IImageCrawlerConfig;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLConnection;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
@@ -76,8 +77,7 @@ public class ImageDownloader {
                 fileName = "image_" + System.currentTimeMillis();
             }
 
-            Path targetPath = getUniqueFilePath(targetDir, fileName);
-            downloadFile(imageUrl, targetPath);
+            downloadWithUniqueName(imageUri, targetDir, fileName);
 
         } catch (Exception e) {
             LOGGER.warning("Fehler beim Download von " + imageUrl + ": " + e.getMessage());
@@ -99,17 +99,13 @@ public class ImageDownloader {
     /**
      * Findet einen eindeutigen Dateipfad, indem bei Bedarf ein Suffix angehängt wird.
      *
+     * @param imageUri die Bild-URI
      * @param directory das Zielverzeichnis
-     * @param fileName der gewünschte Dateiname
-     * @return ein eindeutiger Dateipfad
+     * @param fileName der gewuenschte Dateiname
+     * @throws IOException bei I/O-Fehlern
      */
-    private Path getUniqueFilePath(Path directory, String fileName) {
-        Path filePath = directory.resolve(fileName);
-
-        if (!Files.exists(filePath)) {
-            return filePath;
-        }
-
+    private void downloadWithUniqueName(URI imageUri, Path directory, String fileName)
+        throws IOException {
         String nameWithoutExt = fileName;
         String extension = "";
         int dotIndex = fileName.lastIndexOf('.');
@@ -118,36 +114,41 @@ public class ImageDownloader {
             extension = fileName.substring(dotIndex);
         }
 
-        int counter = 2;
+        int counter = 1;
         while (true) {
-            Path newPath = directory.resolve(nameWithoutExt + "_" + counter + extension);
-            if (!Files.exists(newPath)) {
-                return newPath;
+            String candidateName = counter == 1
+                ? fileName
+                : nameWithoutExt + "_" + counter + extension;
+            Path targetPath = directory.resolve(candidateName);
+            try {
+                downloadFile(imageUri, targetPath);
+                LOGGER.info("Image gespeichert: " + targetPath);
+                return;
+            } catch (FileAlreadyExistsException ignored) {
+                // Another thread wrote this name first; try the next suffix.
+                counter++;
             }
-            counter++;
         }
     }
 
     /**
-     * Lädt eine Datei von der URL herunter und speichert sie lokal.
+     * Laedt eine Datei von der Bild-URI herunter und speichert sie lokal.
      *
-     * @param urlString die Bild-URL
+     * @param imageUri die Bild-URI
      * @param targetPath der Dateipfad zum Speichern
      * @throws IOException bei I/O-Fehlern
      */
-    private void downloadFile(String urlString, Path targetPath) throws IOException {
-        try {
-            URLConnection connection = new URI(urlString).toURL().openConnection();
-            connection.setConnectTimeout(TIMEOUT_MS);
-            connection.setReadTimeout(TIMEOUT_MS);
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+    private void downloadFile(URI imageUri, Path targetPath) throws IOException {
+        URLConnection connection = imageUri.toURL().openConnection();
+        connection.setConnectTimeout(TIMEOUT_MS);
+        connection.setReadTimeout(TIMEOUT_MS);
+        connection.setRequestProperty(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        );
 
-            try (var inputStream = connection.getInputStream()) {
-                Files.copy(inputStream, targetPath);
-                LOGGER.info("Image gespeichert: " + targetPath);
-            }
-        } catch (java.net.URISyntaxException e) {
-            LOGGER.warning("Ungültige URI: " + urlString);
+        try (var inputStream = connection.getInputStream()) {
+            Files.copy(inputStream, targetPath);
         }
     }
 }

@@ -26,7 +26,6 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -134,18 +133,18 @@ class ImageDownloaderTest {
     }
 
     @Test
-    @DisplayName("Kollisionspfad startet bei _2")
-    void testUniqueFilePathStartsAtTwo() throws Exception {
-        Path testDir = tempDownloadPath.resolve("collision-test");
-        Files.createDirectories(testDir);
-        Files.createFile(testDir.resolve("image.jpg"));
+    @DisplayName("Mehrfache Kollisionen: Dateiname wird auf naechstes freies Suffix erhoeht")
+    void testMultipleCollisionsUseNextFreeSuffix() throws Exception {
+        Path targetDir = tempDownloadPath.resolve("1");
+        Files.createDirectories(targetDir);
+        Files.writeString(targetDir.resolve("image.jpg"), "first");
+        Files.writeString(targetDir.resolve("image_2.jpg"), "second");
 
-        var method = ImageDownloader.class.getDeclaredMethod("getUniqueFilePath", Path.class, String.class);
-        method.setAccessible(true);
+        String imageUrl = server.url("/images/image.jpg").toString();
+        downloader.queueDownload(imageUrl, 1);
 
-        Path uniquePath = (Path) method.invoke(downloader, testDir, "image.jpg");
-        assertNotNull(uniquePath);
-        assertTrue(uniquePath.getFileName().toString().endsWith("_2.jpg"));
+        assertTrue(waitFor(() -> activeDownloadTasks.get() == 0, 5000));
+        assertTrue(Files.exists(targetDir.resolve("image_3.jpg")));
     }
 
     private boolean waitFor(BooleanSupplier condition, long timeoutMs) throws InterruptedException {

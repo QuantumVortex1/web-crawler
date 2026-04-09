@@ -24,6 +24,20 @@ public class ImageCrawlerConfig implements IImageCrawlerConfig {
     public ImageCrawlerConfig(int numberOfAllowedParallelWebsiteScans,
                              int numberOfAllowedParallelImageDownloads,
                              Path downloadPath) {
+        if (numberOfAllowedParallelWebsiteScans < 1) {
+            throw new IllegalArgumentException(
+                "numberOfAllowedParallelWebsiteScans must be greater than 0"
+            );
+        }
+        if (numberOfAllowedParallelImageDownloads < 1) {
+            throw new IllegalArgumentException(
+                "numberOfAllowedParallelImageDownloads must be greater than 0"
+            );
+        }
+        if (downloadPath == null) {
+            throw new IllegalArgumentException("downloadPath must not be null");
+        }
+
         this.numberOfAllowedParallelWebsiteScans = numberOfAllowedParallelWebsiteScans;
         this.numberOfAllowedParallelImageDownloads = numberOfAllowedParallelImageDownloads;
         this.downloadPath = downloadPath;
