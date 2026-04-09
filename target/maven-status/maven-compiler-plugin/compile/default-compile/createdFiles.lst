@@ -1,7 +1,0 @@
-parallel\core\WebsiteAnalyzer.class
-parallel\api\IImageCrawlerConfig.class
-parallel\core\ImageCrawler.class
-parallel\core\ImageDownloader.class
-parallel\api\IImageCrawler.class
-parallel\App.class
-parallel\core\ImageCrawlerConfig.class
