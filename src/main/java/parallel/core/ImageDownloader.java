@@ -125,7 +125,6 @@ public class ImageDownloader {
                 LOGGER.info("Image gespeichert: " + targetPath);
                 return;
             } catch (FileAlreadyExistsException ignored) {
-                // Another thread wrote this name first; try the next suffix.
                 counter++;
             }
         }

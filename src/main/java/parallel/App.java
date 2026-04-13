@@ -13,10 +13,9 @@ public class App {
 
     private static final long DEFAULT_POLL_INTERVAL_MS = 500L;
     private static final String[] DEFAULT_URLS = {
-        "https://de.wikipedia.org/wiki/World_Wide_Web",
-        "https://www.bbc.com/news",
-        "https://www.nationalgeographic.com/animals",
-        "https://www.youtube.com/"
+        "https://screenrant.com/chuck-norris-memes-hilarious-funny/",
+        "https://de.wikipedia.org/wiki/Chuck_Norris_Facts",
+        "https://gratisography.com/photo/reindeer-dog/"
     };
 
     /**
