@@ -13,10 +13,6 @@ Beide Stufen arbeiten parallel, sind aber getrennt konfigurierbar. So wird verhi
 
 ## 2. Architektur und Modularisierung
 
-Die folgende Abbildung visualisiert den modularen Ablauf und die getrennten Parallelitätsbereiche (Quelle: eigene Darstellung):
-
-![Diagramm](swimlane.png)
-
 Die Architektur trennt Interfaces und Implementierungen, um den SOLID-Prinzipien zu folgen:
 
 #### 2.1 API-Schicht
@@ -33,6 +29,12 @@ Die Core-Schicht ist in vier Klassen aufgeteilt, die jeweils eine klar abgegrenz
 2. `WebsiteAnalyzer`: HTML laden, `img`-Referenzen extrahieren, URLs auflösen.
 3. `ImageDownloader`: Download und Speicherung inklusive Konfliktbehandlung.
 4. `ImageCrawlerConfig`: Konfiguration von Parallelität und Downloadpfad.
+
+#### 2.3 Darstellung der Modularisierung
+
+Die folgende Abbildung visualisiert den modularen Ablauf und die getrennten Parallelitätsbereiche (Quelle: eigene Darstellung):
+
+![Diagramm](swimlane.png)
 
 
 ## 3. Datenkanäle zwischen den Modulen
